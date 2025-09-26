@@ -1,1 +1,2 @@
-pub struct PrivacyManager; pub struct ComplianceManager;
+pub struct PrivacyManager;
+pub struct ComplianceManager;

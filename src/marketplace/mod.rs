@@ -1,10 +1,10 @@
 // src/marketplace/mod.rs
-use serde::{Deserialize, Serialize};
-use nostr::{Event, EventBuilder, Keys, Kind, Tag, Filter, Timestamp};
+use nostr::{Event, EventBuilder, Filter, Keys, Kind, Tag, Timestamp};
 use nostr_sdk::{Client, RelayUrl};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tokio::time::{timeout, Duration};
 use uuid::Uuid;
-use tokio::time::{Duration, timeout};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpecialistProfile {
@@ -102,13 +102,21 @@ impl MarketplaceClient {
         let content = serde_json::to_string(task_request)?;
         let tags = vec![
             Tag::generic(nostr::TagKind::Custom("task_type".into()), vec!["request"]),
-            Tag::generic(nostr::TagKind::Custom("skills".into()), task_request.required_skills.clone()),
-            Tag::generic(nostr::TagKind::Custom("max_budget".into()), vec![&task_request.max_budget_sats.to_string()]),
-            Tag::generic(nostr::TagKind::Custom("deadline".into()), vec![&task_request.deadline_minutes.to_string()]),
+            Tag::generic(
+                nostr::TagKind::Custom("skills".into()),
+                task_request.required_skills.clone(),
+            ),
+            Tag::generic(
+                nostr::TagKind::Custom("max_budget".into()),
+                vec![&task_request.max_budget_sats.to_string()],
+            ),
+            Tag::generic(
+                nostr::TagKind::Custom("deadline".into()),
+                vec![&task_request.deadline_minutes.to_string()],
+            ),
         ];
 
-        let event = EventBuilder::new(Kind::Custom(30002), &content, tags)
-            .sign_with_keys(keys)?;
+        let event = EventBuilder::new(Kind::Custom(30002), &content, tags).sign_with_keys(keys)?;
 
         self.nostr_client.send_event(event).await?;
         println!("Task request broadcast: {}", task_request.task_id);
@@ -121,18 +129,22 @@ impl MarketplaceClient {
         task_id: &str,
         timeout_seconds: u64,
     ) -> Result<Vec<TaskBid>, Box<dyn std::error::Error>> {
-        let filter = Filter::new()
-            .kind(Kind::Custom(30003))
-            .custom_tag(nostr::SingleLetterTag::lowercase(nostr::Alphabet::T), vec![task_id]);
+        let filter = Filter::new().kind(Kind::Custom(30003)).custom_tag(
+            nostr::SingleLetterTag::lowercase(nostr::Alphabet::T),
+            vec![task_id],
+        );
 
         let timeout_duration = Duration::from_secs(timeout_seconds);
         let mut collected_bids = Vec::new();
 
-        println!("Collecting bids for task {} (timeout: {}s)...", task_id, timeout_seconds);
+        println!(
+            "Collecting bids for task {} (timeout: {}s)...",
+            task_id, timeout_seconds
+        );
 
         let result = timeout(timeout_duration, async {
             let events = self.nostr_client.get_events_of(vec![filter], None).await?;
-            
+
             for event in events {
                 if let Ok(bid) = self.parse_bid_event(&event) {
                     if self.validate_bid(&bid) {
@@ -140,14 +152,18 @@ impl MarketplaceClient {
                     }
                 }
             }
-            
+
             Ok::<_, Box<dyn std::error::Error>>(collected_bids)
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(bids) => Ok(bids?),
             Err(_) => {
-                println!("Bid collection timed out, returning {} collected bids", collected_bids.len());
+                println!(
+                    "Bid collection timed out, returning {} collected bids",
+                    collected_bids.len()
+                );
                 Ok(collected_bids)
             }
         }
@@ -160,10 +176,14 @@ impl MarketplaceClient {
 
         for specialist in mock_specialists {
             // Check if specialist matches required skills
-            let skill_match = task_request.required_skills.iter()
+            let skill_match = task_request
+                .required_skills
+                .iter()
                 .any(|required_skill| specialist.skills.contains(required_skill));
 
-            if skill_match && specialist.reputation_score >= task_request.quality_requirements.min_reputation {
+            if skill_match
+                && specialist.reputation_score >= task_request.quality_requirements.min_reputation
+            {
                 let bid = self.generate_mock_bid(&specialist, task_request);
                 bids.push(bid);
             }
@@ -173,7 +193,9 @@ impl MarketplaceClient {
         bids.sort_by(|a, b| {
             let a_score = self.calculate_bid_score(a);
             let b_score = self.calculate_bid_score(b);
-            b_score.partial_cmp(&a_score).unwrap_or(std::cmp::Ordering::Equal)
+            b_score
+                .partial_cmp(&a_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         bids
@@ -184,13 +206,20 @@ impl MarketplaceClient {
             SpecialistProfile {
                 pubkey: "specialist_1_pubkey".to_string(),
                 name: "BioinformaticsBot".to_string(),
-                skills: vec!["bioinformatics".to_string(), "sequence_analysis".to_string(), "alphafold".to_string()],
+                skills: vec![
+                    "bioinformatics".to_string(),
+                    "sequence_analysis".to_string(),
+                    "alphafold".to_string(),
+                ],
                 hourly_rate_sats: 150,
                 reputation_score: 4.8,
                 completed_tasks: 342,
                 success_rate: 0.97,
                 last_active: chrono::Utc::now().timestamp() as u64,
-                specializations: vec!["protein_folding".to_string(), "molecular_dynamics".to_string()],
+                specializations: vec![
+                    "protein_folding".to_string(),
+                    "molecular_dynamics".to_string(),
+                ],
                 compute_resources: ComputeResources {
                     cpu_cores: 32,
                     gpu_available: true,
@@ -202,13 +231,20 @@ impl MarketplaceClient {
             SpecialistProfile {
                 pubkey: "specialist_2_pubkey".to_string(),
                 name: "QuantMaster".to_string(),
-                skills: vec!["quantitative_analysis".to_string(), "risk_modeling".to_string(), "machine_learning".to_string()],
+                skills: vec![
+                    "quantitative_analysis".to_string(),
+                    "risk_modeling".to_string(),
+                    "machine_learning".to_string(),
+                ],
                 hourly_rate_sats: 200,
                 reputation_score: 4.9,
                 completed_tasks: 198,
                 success_rate: 0.95,
                 last_active: chrono::Utc::now().timestamp() as u64,
-                specializations: vec!["portfolio_optimization".to_string(), "derivatives_pricing".to_string()],
+                specializations: vec![
+                    "portfolio_optimization".to_string(),
+                    "derivatives_pricing".to_string(),
+                ],
                 compute_resources: ComputeResources {
                     cpu_cores: 16,
                     gpu_available: false,
@@ -220,7 +256,11 @@ impl MarketplaceClient {
             SpecialistProfile {
                 pubkey: "specialist_3_pubkey".to_string(),
                 name: "MLNinja".to_string(),
-                skills: vec!["machine_learning".to_string(), "deep_learning".to_string(), "gpu_computing".to_string()],
+                skills: vec![
+                    "machine_learning".to_string(),
+                    "deep_learning".to_string(),
+                    "gpu_computing".to_string(),
+                ],
                 hourly_rate_sats: 180,
                 reputation_score: 4.6,
                 completed_tasks: 267,
@@ -241,7 +281,11 @@ impl MarketplaceClient {
     fn generate_mock_bid(&self, specialist: &SpecialistProfile, task: &TaskRequest) -> TaskBid {
         // Calculate bid price based on specialist's rate and task complexity
         let base_price = specialist.hourly_rate_sats * (task.deadline_minutes as u64 / 60).max(1);
-        let complexity_multiplier = if task.required_skills.len() > 2 { 1.3 } else { 1.0 };
+        let complexity_multiplier = if task.required_skills.len() > 2 {
+            1.3
+        } else {
+            1.0
+        };
         let quoted_price = (base_price as f64 * complexity_multiplier) as u64;
 
         // Ensure bid is within budget
@@ -253,8 +297,8 @@ impl MarketplaceClient {
             specialist_pubkey: specialist.pubkey.clone(),
             quoted_price_sats: final_price,
             estimated_completion_time: (task.deadline_minutes as f64 * 0.8) as u32,
-            proposal: format!("I can complete this {} task using my expertise in {}. My approach includes: 1) Initial analysis, 2) Core computation, 3) Results validation.", 
-                            task.description, 
+            proposal: format!("I can complete this {} task using my expertise in {}. My approach includes: 1) Initial analysis, 2) Core computation, 3) Results validation.",
+                            task.description,
                             specialist.specializations.join(", ")),
             stake_amount: final_price / 10, // 10% stake
             expires_at: chrono::Utc::now().timestamp() as u64 + 3600, // 1 hour expiry
@@ -280,8 +324,8 @@ impl MarketplaceClient {
 
     fn validate_bid(&self, bid: &TaskBid) -> bool {
         // Basic validation
-        bid.quoted_price_sats > 0 
-            && bid.estimated_completion_time > 0 
+        bid.quoted_price_sats > 0
+            && bid.estimated_completion_time > 0
             && bid.expires_at > chrono::Utc::now().timestamp() as u64
             && !bid.specialist_pubkey.is_empty()
     }
@@ -297,7 +341,8 @@ impl MarketplaceClient {
         }
 
         // For MVP, select the highest-scoring bid
-        let mut scored_bids: Vec<_> = bids.into_iter()
+        let mut scored_bids: Vec<_> = bids
+            .into_iter()
             .map(|bid| {
                 let score = self.calculate_bid_score(&bid);
                 (bid, score)
@@ -305,7 +350,7 @@ impl MarketplaceClient {
             .collect();
 
         scored_bids.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         Some(scored_bids.into_iter().next()?.0)
     }
 
@@ -313,12 +358,14 @@ impl MarketplaceClient {
         println!("\n=== Bid Summary ===");
         for (i, bid) in bids.iter().enumerate() {
             let score = self.calculate_bid_score(bid);
-            println!("{}. Specialist: {} | Price: {} sats | Time: {} min | Score: {:.3}", 
-                    i + 1, 
-                    bid.specialist_pubkey, 
-                    bid.quoted_price_sats, 
-                    bid.estimated_completion_time,
-                    score);
+            println!(
+                "{}. Specialist: {} | Price: {} sats | Time: {} min | Score: {:.3}",
+                i + 1,
+                bid.specialist_pubkey,
+                bid.quoted_price_sats,
+                bid.estimated_completion_time,
+                score
+            );
         }
         println!("==================\n");
     }

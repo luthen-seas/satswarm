@@ -1,17 +1,17 @@
 // src/agent/cli.rs
-use clap::{App, Arg, SubCommand};
-use tokio;
-use std::io::{self, Write};
-use uuid::Uuid;
 use chrono::Utc;
+use clap::{App, Arg, SubCommand};
+use std::io::{self, Write};
+use tokio;
+use uuid::Uuid;
 
 // Import our modules
 use crate::decomposition::{TaskDecomposer, TaskStatus};
-use crate::marketplace::{MarketplaceClient, TaskRequest, QualityRequirements};
-use crate::payments::{SatswarmPaymentSystem, EscrowConditions};
-use crate::reputation::ReputationManager;
-use crate::privacy::{PrivacyManager, ContentType, PrivacyLevel, AccessControl};
+use crate::marketplace::{MarketplaceClient, QualityRequirements, TaskRequest};
 use crate::observability::{ObservabilityDashboard, TaskEventType};
+use crate::payments::{EscrowConditions, SatswarmPaymentSystem};
+use crate::privacy::{AccessControl, ContentType, PrivacyLevel, PrivacyManager};
+use crate::reputation::ReputationManager;
 use nostr::Keys;
 
 pub struct GeneralAgent {
@@ -74,7 +74,10 @@ impl GeneralAgent {
                     self.show_balance();
                 }
                 _ => {
-                    println!("Unknown command: '{}'. Type 'help' for available commands.", input);
+                    println!(
+                        "Unknown command: '{}'. Type 'help' for available commands.",
+                        input
+                    );
                 }
             }
         }
@@ -100,19 +103,30 @@ impl GeneralAgent {
 
         // Demo task request
         let demo_request = "Analyze the protein structure of BRCA1 for drug binding sites";
-        
+
         println!("\n1️⃣  TASK REQUEST");
         println!("User request: '{}'", demo_request);
 
         // Step 1: Task Decomposition
         println!("\n2️⃣  TASK DECOMPOSITION");
         let task_tree = self.task_decomposer.decompose(demo_request)?;
-        
-        println!("✅ Task decomposed into {} subtasks:", task_tree.root.subtasks.len());
+
+        println!(
+            "✅ Task decomposed into {} subtasks:",
+            task_tree.root.subtasks.len()
+        );
         for (i, subtask) in task_tree.root.subtasks.iter().enumerate() {
-            println!("  {}. {} ({} sats)", i + 1, subtask.description, subtask.estimated_sats);
+            println!(
+                "  {}. {} ({} sats)",
+                i + 1,
+                subtask.description,
+                subtask.estimated_sats
+            );
         }
-        println!("Total estimated cost: {} sats", task_tree.total_estimated_cost);
+        println!(
+            "Total estimated cost: {} sats",
+            task_tree.total_estimated_cost
+        );
 
         // Update dashboard
         self.dashboard.record_task_event(
@@ -140,8 +154,10 @@ impl GeneralAgent {
             },
         };
 
-        self.marketplace_client.broadcast_task_request(&task_request, &self.keys).await?;
-        
+        self.marketplace_client
+            .broadcast_task_request(&task_request, &self.keys)
+            .await?;
+
         self.dashboard.record_task_event(
             &task_tree.root.id,
             TaskEventType::TaskBroadcast,
@@ -154,10 +170,10 @@ impl GeneralAgent {
         // Step 3: Collect Bids (Simulated)
         println!("\n4️⃣  COLLECTING BIDS");
         println!("Waiting for specialist bids... (simulating)");
-        
+
         let bids = self.marketplace_client.simulate_bids(&task_request).await;
         println!("✅ Received {} bids from specialists", bids.len());
-        
+
         self.marketplace_client.print_bid_summary(&bids);
 
         for bid in &bids {
@@ -175,8 +191,11 @@ impl GeneralAgent {
             println!("🏆 Selected winning bid:");
             println!("   Specialist: {}", &winning_bid.specialist_pubkey[..16]);
             println!("   Price: {} sats", winning_bid.quoted_price_sats);
-            println!("   Estimated time: {} minutes", winning_bid.estimated_completion_time);
-            
+            println!(
+                "   Estimated time: {} minutes",
+                winning_bid.estimated_completion_time
+            );
+
             self.dashboard.record_task_event(
                 &task_tree.root.id,
                 TaskEventType::BidSelected,
@@ -194,13 +213,16 @@ impl GeneralAgent {
                 auto_release_hours: 24,
             };
 
-            let escrow = self.payment_system.create_escrow(
-                &task_tree.root.id,
-                &task_request.requester_pubkey,
-                &winning_bid.specialist_pubkey,
-                winning_bid.quoted_price_sats,
-                escrow_conditions,
-            ).await?;
+            let escrow = self
+                .payment_system
+                .create_escrow(
+                    &task_tree.root.id,
+                    &task_request.requester_pubkey,
+                    &winning_bid.specialist_pubkey,
+                    winning_bid.quoted_price_sats,
+                    escrow_conditions,
+                )
+                .await?;
 
             println!("✅ Escrow created: {} sats locked", escrow.amount_sats);
 
@@ -214,10 +236,10 @@ impl GeneralAgent {
             // Step 6: Simulate Task Execution
             println!("\n7️⃣  TASK EXECUTION");
             println!("Specialist working on task... (simulating)");
-            
+
             // Simulate work time
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            
+
             self.dashboard.record_task_event(
                 &task_tree.root.id,
                 TaskEventType::WorkSubmitted,
@@ -230,7 +252,7 @@ impl GeneralAgent {
             // Step 7: Mock Verification
             println!("\n8️⃣  VERIFICATION");
             println!("Verifying output... (mocking BitVM verification)");
-            
+
             self.dashboard.record_task_event(
                 &task_tree.root.id,
                 TaskEventType::VerificationStarted,
@@ -240,9 +262,12 @@ impl GeneralAgent {
 
             // Simulate verification time
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-            
+
             let quality_rating = 4.6; // Mock high-quality result
-            println!("✅ Verification completed - Quality rating: {}/5.0", quality_rating);
+            println!(
+                "✅ Verification completed - Quality rating: {}/5.0",
+                quality_rating
+            );
 
             self.dashboard.record_task_event(
                 &task_tree.root.id,
@@ -253,8 +278,10 @@ impl GeneralAgent {
 
             // Step 8: Release Payment
             println!("\n9️⃣  PAYMENT RELEASE");
-            self.payment_system.release_escrow(&escrow.escrow_id, quality_rating).await?;
-            
+            self.payment_system
+                .release_escrow(&escrow.escrow_id, quality_rating)
+                .await?;
+
             self.dashboard.record_task_event(
                 &task_tree.root.id,
                 TaskEventType::PaymentReleased,
@@ -273,7 +300,8 @@ impl GeneralAgent {
                 timeliness_score: 4.8,
                 communication_score: 4.5,
                 would_work_again: true,
-                comment: "Excellent protein analysis with detailed binding site identification".to_string(),
+                comment: "Excellent protein analysis with detailed binding site identification"
+                    .to_string(),
                 verified_completion: true,
                 created_at: Utc::now().timestamp() as u64,
                 signature: "mock_signature".to_string(),
@@ -291,8 +319,11 @@ impl GeneralAgent {
 
             // Step 10: Economic Loop Update & Deflationary Distribution
             println!("\n🎁 ECONOMIC REWARDS");
-            let distributions = self.payment_system.distribute_deflationary_rewards().await?;
-            
+            let distributions = self
+                .payment_system
+                .distribute_deflationary_rewards()
+                .await?;
+
             if !distributions.is_empty() {
                 println!("✅ Deflationary rewards distributed:");
                 for (pubkey, amount) in distributions {
@@ -304,10 +335,10 @@ impl GeneralAgent {
             println!("\n✨ DEMO COMPLETED SUCCESSFULLY!");
             println!("=====================================");
             self.payment_system.print_economic_status();
-            
+
             // Update dashboard metrics
-            self.dashboard.update_metrics(5, 0, 1, winning_bid.quoted_price_sats, 0);
-            
+            self.dashboard
+                .update_metrics(5, 0, 1, winning_bid.quoted_price_sats, 0);
         } else {
             println!("❌ No suitable bids received");
         }
@@ -315,19 +346,28 @@ impl GeneralAgent {
         Ok(())
     }
 
-    async fn process_task_request(&mut self, request: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn process_task_request(
+        &mut self,
+        request: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         println!("\n🔍 Processing task request: '{}'", request);
 
         // Decompose task
         let task_tree = self.task_decomposer.decompose(request)?;
-        println!("✅ Task decomposed into {} subtasks", task_tree.root.subtasks.len());
-        
+        println!(
+            "✅ Task decomposed into {} subtasks",
+            task_tree.root.subtasks.len()
+        );
+
         // Create marketplace request
         let task_request = TaskRequest {
             task_id: task_tree.root.id.clone(),
             requester_pubkey: self.keys.public_key().to_string(),
             description: request.to_string(),
-            required_skills: task_tree.root.subtasks.iter()
+            required_skills: task_tree
+                .root
+                .subtasks
+                .iter()
                 .flat_map(|st| st.required_skills.clone())
                 .collect::<std::collections::HashSet<_>>()
                 .into_iter()
@@ -344,7 +384,9 @@ impl GeneralAgent {
         };
 
         // Broadcast to marketplace
-        self.marketplace_client.broadcast_task_request(&task_request, &self.keys).await?;
+        self.marketplace_client
+            .broadcast_task_request(&task_request, &self.keys)
+            .await?;
         println!("✅ Task broadcast to marketplace");
 
         // Collect and display simulated bids
@@ -363,15 +405,20 @@ impl GeneralAgent {
         println!("\n=== AGENT STATUS ===");
         println!("Public Key: {}", self.keys.public_key());
         println!("Connected to relay: ws://localhost:8080");
-        
-        let payment_status = self.payment_system.get_payment_status(&self.keys.public_key().to_string());
+
+        let payment_status = self
+            .payment_system
+            .get_payment_status(&self.keys.public_key().to_string());
         println!("Balance: {} sats", payment_status.balance_sats);
-        
+
         if let Some(tier) = payment_status.economic_tier {
             println!("Economic Tier: {:?}", tier);
-            println!("Visibility Multiplier: {:.1}x", payment_status.visibility_multiplier);
+            println!(
+                "Visibility Multiplier: {:.1}x",
+                payment_status.visibility_multiplier
+            );
         }
-        
+
         println!("Active Escrows: {}", payment_status.active_escrows);
         println!("Pending Transfers: {}", payment_status.pending_transfers);
         println!("===================\n");
@@ -379,9 +426,11 @@ impl GeneralAgent {
 
     fn show_balance(&self) {
         println!("\n💰 PAYMENT BALANCE");
-        let status = self.payment_system.get_payment_status(&self.keys.public_key().to_string());
+        let status = self
+            .payment_system
+            .get_payment_status(&self.keys.public_key().to_string());
         println!("Current Balance: {} sats", status.balance_sats);
-        
+
         if let Some(tier) = &status.economic_tier {
             println!("Performance Tier: {:?}", tier);
             println!("Rate Multiplier: {:.2}x", status.visibility_multiplier);
@@ -414,14 +463,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .takes_value(true)
                 .default_value("http://localhost:3338"),
         )
-        .subcommand(
-            SubCommand::with_name("interactive")
-                .about("Start interactive CLI mode")
-        )
-        .subcommand(
-            SubCommand::with_name("demo")
-                .about("Run the full workflow demo")
-        )
+        .subcommand(SubCommand::with_name("interactive").about("Start interactive CLI mode"))
+        .subcommand(SubCommand::with_name("demo").about("Run the full workflow demo"))
         .subcommand(
             SubCommand::with_name("task")
                 .about("Process a single task")
@@ -429,16 +472,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Arg::with_name("description")
                         .help("Task description")
                         .required(true)
-                        .index(1)
-                )
+                        .index(1),
+                ),
         )
         .get_matches();
 
     println!("🚀 Initializing Satswarm General Agent...");
-    
+
     // Create agent instance
     let mut agent = GeneralAgent::new().await?;
-    
+
     println!("✅ Agent initialized successfully");
     println!("🔑 Agent Public Key: {}", agent.keys.public_key());
 
@@ -509,11 +552,11 @@ mod tests {
         assert!(agent.is_ok());
     }
 
-    #[tokio::test] 
+    #[tokio::test]
     async fn test_task_decomposition() {
         let agent = GeneralAgent::new().await.unwrap();
         let result = agent.task_decomposer.decompose("Analyze protein structure");
-        
+
         assert!(result.is_ok());
         let task_tree = result.unwrap();
         assert!(task_tree.root.subtasks.len() > 0);
@@ -523,7 +566,7 @@ mod tests {
     #[tokio::test]
     async fn test_marketplace_simulation() {
         let mut agent = GeneralAgent::new().await.unwrap();
-        
+
         let task_request = TaskRequest {
             task_id: "test_task".to_string(),
             requester_pubkey: agent.keys.public_key().to_string(),
@@ -547,7 +590,7 @@ mod tests {
     #[tokio::test]
     async fn test_payment_escrow() {
         let mut agent = GeneralAgent::new().await.unwrap();
-        
+
         let conditions = EscrowConditions {
             requires_verification: true,
             min_quality_rating: 4.0,
@@ -556,13 +599,16 @@ mod tests {
             auto_release_hours: 24,
         };
 
-        let result = agent.payment_system.create_escrow(
-            "test_task",
-            "requester_pubkey",
-            "specialist_pubkey",
-            1000,
-            conditions,
-        ).await;
+        let result = agent
+            .payment_system
+            .create_escrow(
+                "test_task",
+                "requester_pubkey",
+                "specialist_pubkey",
+                1000,
+                conditions,
+            )
+            .await;
 
         assert!(result.is_ok());
         let escrow = result.unwrap();

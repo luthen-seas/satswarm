@@ -1,27 +1,27 @@
 // src/lib.rs - Main Satswarm Protocol Integration
+use chrono::Utc;
+use nostr::Keys;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::Utc;
-use nostr::Keys;
 
 // Import all modules
 pub mod decomposition;
 pub mod marketplace;
-pub mod payments;
-pub mod reputation;
-pub mod privacy;
 pub mod observability;
+pub mod payments;
+pub mod privacy;
 pub mod relay;
+pub mod reputation;
 
-use decomposition::{TaskDecomposer, TaskTree, TaskStatus};
-use marketplace::{MarketplaceClient, TaskRequest, TaskBid, QualityRequirements};
-use payments::{SatswarmPaymentSystem, PaymentEscrow, EscrowConditions, EscrowStatus};
-use reputation::{ReputationManager, TaskRating, ReputationScore};
-use privacy::{PrivacyManager, ComplianceManager, ContentType, PrivacyLevel, AccessControl};
-use observability::{ObservabilityDashboard, TaskEventType, AlertSeverity, AlertCategory};
+use decomposition::{TaskDecomposer, TaskStatus, TaskTree};
+use marketplace::{MarketplaceClient, QualityRequirements, TaskBid, TaskRequest};
+use observability::{AlertCategory, AlertSeverity, ObservabilityDashboard, TaskEventType};
+use payments::{EscrowConditions, EscrowStatus, PaymentEscrow, SatswarmPaymentSystem};
+use privacy::{AccessControl, ComplianceManager, ContentType, PrivacyLevel, PrivacyManager};
+use reputation::{ReputationManager, ReputationScore, TaskRating};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SatswarmConfig {
@@ -39,7 +39,10 @@ impl Default for SatswarmConfig {
     fn default() -> Self {
         Self {
             relay_urls: vec!["ws://localhost:8080".to_string()],
-            mint_urls: vec!["http://localhost:3338".to_string(), "http://localhost:3339".to_string()],
+            mint_urls: vec![
+                "http://localhost:3338".to_string(),
+                "http://localhost:3339".to_string(),
+            ],
             agent_keys: None,
             default_privacy_level: PrivacyLevel::Participants,
             compliance_enabled: true,
@@ -137,12 +140,12 @@ impl SatswarmProtocol {
 
         // Initialize relay manager
         let relay_manager = Arc::new(RwLock::new(
-            relay::RelayManager::new(config.relay_urls.clone()).await?
+            relay::RelayManager::new(config.relay_urls.clone()).await?,
         ));
 
         // Initialize marketplace client
         let marketplace_client = Arc::new(RwLock::new(
-            MarketplaceClient::new(&config.relay_urls[0]).await?
+            MarketplaceClient::new(&config.relay_urls[0]).await?,
         ));
 
         // Initialize payment system
@@ -174,7 +177,6 @@ impl SatswarmProtocol {
         max_budget_sats: u64,
         deadline_minutes: u32,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        
         println!("🚀 Starting end-to-end task processing...");
         let start_time = std::time::Instant::now();
 
@@ -182,8 +184,11 @@ impl SatswarmProtocol {
         let task_tree = self.decompose_task(request_description).await?;
         let task_id = task_tree.root.id.clone();
 
-        println!("✅ Task decomposed: {} subtasks, {} sats estimated", 
-                 task_tree.root.subtasks.len(), task_tree.total_estimated_cost);
+        println!(
+            "✅ Task decomposed: {} subtasks, {} sats estimated",
+            task_tree.root.subtasks.len(),
+            task_tree.total_estimated_cost
+        );
 
         // Step 2: Create Task Execution Record
         let task_execution = TaskExecution {
@@ -198,15 +203,13 @@ impl SatswarmProtocol {
             rating: None,
             created_at: Utc::now().timestamp() as u64,
             updated_at: Utc::now().timestamp() as u64,
-            execution_log: vec![
-                ExecutionLogEntry {
-                    timestamp: Utc::now().timestamp() as u64,
-                    event_type: TaskEventType::TaskCreated,
-                    participant: self.keys.public_key().to_string(),
-                    message: "Task created and decomposed".to_string(),
-                    metadata: HashMap::new(),
-                }
-            ],
+            execution_log: vec![ExecutionLogEntry {
+                timestamp: Utc::now().timestamp() as u64,
+                event_type: TaskEventType::TaskCreated,
+                participant: self.keys.public_key().to_string(),
+                message: "Task created and decomposed".to_string(),
+                metadata: HashMap::new(),
+            }],
         };
 
         // Store task execution
@@ -216,26 +219,31 @@ impl SatswarmProtocol {
         }
 
         // Step 3: Broadcast to Marketplace
-        let task_request = self.create_task_request(&task_execution, max_budget_sats, deadline_minutes).await?;
+        let task_request = self
+            .create_task_request(&task_execution, max_budget_sats, deadline_minutes)
+            .await?;
         self.broadcast_task(&task_request).await?;
 
         // Update status
-        self.update_task_status(&task_id, TaskExecutionStatus::Broadcast).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::Broadcast)
+            .await?;
 
         // Step 4: Collect Bids
         let bids = self.collect_bids(&task_id, 10).await?; // 10 second timeout for demo
-        
+
         if bids.is_empty() {
-            self.update_task_status(&task_id, TaskExecutionStatus::Failed).await?;
+            self.update_task_status(&task_id, TaskExecutionStatus::Failed)
+                .await?;
             return Err("No bids received".into());
         }
 
         println!("📥 Received {} bids", bids.len());
-        self.update_task_status(&task_id, TaskExecutionStatus::BiddingClosed).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::BiddingClosed)
+            .await?;
 
         // Step 5: Select Winning Bid
         let winning_bid = self.select_winning_bid(bids).await?;
-        
+
         // Update task with selected bid
         {
             let mut tasks = self.active_tasks.write().await;
@@ -245,12 +253,16 @@ impl SatswarmProtocol {
             }
         }
 
-        println!("🏆 Selected specialist: {}", &winning_bid.specialist_pubkey[..16]);
-        self.update_task_status(&task_id, TaskExecutionStatus::Assigned).await?;
+        println!(
+            "🏆 Selected specialist: {}",
+            &winning_bid.specialist_pubkey[..16]
+        );
+        self.update_task_status(&task_id, TaskExecutionStatus::Assigned)
+            .await?;
 
         // Step 6: Create Payment Escrow
         let escrow = self.create_payment_escrow(&task_id, &winning_bid).await?;
-        
+
         // Update task with escrow
         {
             let mut tasks = self.active_tasks.write().await;
@@ -260,15 +272,17 @@ impl SatswarmProtocol {
         }
 
         println!("💰 Escrow created: {} sats locked", escrow.amount_sats);
-        self.update_task_status(&task_id, TaskExecutionStatus::InProgress).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::InProgress)
+            .await?;
 
         // Step 7: Simulate Task Execution
         self.simulate_task_execution(&task_id).await?;
-        self.update_task_status(&task_id, TaskExecutionStatus::Submitted).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::Submitted)
+            .await?;
 
         // Step 8: Verification
         let verification_result = self.verify_task_output(&task_id).await?;
-        
+
         // Update task with verification
         {
             let mut tasks = self.active_tasks.write().await;
@@ -277,22 +291,32 @@ impl SatswarmProtocol {
             }
         }
 
-        println!("✅ Verification completed: Quality {:.1}/5.0", verification_result.quality_score);
-        self.update_task_status(&task_id, TaskExecutionStatus::Verified).await?;
+        println!(
+            "✅ Verification completed: Quality {:.1}/5.0",
+            verification_result.quality_score
+        );
+        self.update_task_status(&task_id, TaskExecutionStatus::Verified)
+            .await?;
 
         // Step 9: Release Payment
         self.release_payment(&task_id, &verification_result).await?;
-        self.update_task_status(&task_id, TaskExecutionStatus::PaymentReleased).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::PaymentReleased)
+            .await?;
 
         // Step 10: Update Reputation & Economic Loops
-        self.update_reputation(&task_id, &verification_result).await?;
+        self.update_reputation(&task_id, &verification_result)
+            .await?;
         self.process_economic_rewards(&task_id).await?;
 
         // Final status
-        self.update_task_status(&task_id, TaskExecutionStatus::Completed).await?;
+        self.update_task_status(&task_id, TaskExecutionStatus::Completed)
+            .await?;
 
         let elapsed = start_time.elapsed();
-        println!("🎉 Task completed successfully in {:.2}s", elapsed.as_secs_f64());
+        println!(
+            "🎉 Task completed successfully in {:.2}s",
+            elapsed.as_secs_f64()
+        );
 
         // Update dashboard metrics
         {
@@ -306,9 +330,9 @@ impl SatswarmProtocol {
 
     async fn decompose_task(&self, request: &str) -> Result<TaskTree, Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
-        
+
         let task_tree = self.task_decomposer.decompose(request)?;
-        
+
         let elapsed = start_time.elapsed().as_millis() as f64;
         {
             let mut dashboard = self.dashboard.write().await;
@@ -324,8 +348,10 @@ impl SatswarmProtocol {
         max_budget_sats: u64,
         deadline_minutes: u32,
     ) -> Result<TaskRequest, Box<dyn std::error::Error>> {
-        
-        let required_skills: Vec<String> = task_execution.task_tree.root.subtasks
+        let required_skills: Vec<String> = task_execution
+            .task_tree
+            .root
+            .subtasks
             .iter()
             .flat_map(|subtask| subtask.required_skills.clone())
             .collect::<std::collections::HashSet<_>>()
@@ -349,9 +375,14 @@ impl SatswarmProtocol {
         })
     }
 
-    async fn broadcast_task(&self, task_request: &TaskRequest) -> Result<(), Box<dyn std::error::Error>> {
+    async fn broadcast_task(
+        &self,
+        task_request: &TaskRequest,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let marketplace = self.marketplace_client.write().await;
-        marketplace.broadcast_task_request(task_request, &self.keys).await?;
+        marketplace
+            .broadcast_task_request(task_request, &self.keys)
+            .await?;
 
         // Log to dashboard
         let mut dashboard = self.dashboard.write().await;
@@ -365,19 +396,26 @@ impl SatswarmProtocol {
         Ok(())
     }
 
-    async fn collect_bids(&self, task_id: &str, timeout_seconds: u64) -> Result<Vec<TaskBid>, Box<dyn std::error::Error>> {
+    async fn collect_bids(
+        &self,
+        task_id: &str,
+        timeout_seconds: u64,
+    ) -> Result<Vec<TaskBid>, Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
 
         // Get task request for bid simulation
         let task_request = {
             let tasks = self.active_tasks.read().await;
             let task = tasks.get(task_id).ok_or("Task not found")?;
-            
+
             TaskRequest {
                 task_id: task.task_id.clone(),
                 requester_pubkey: task.requester_pubkey.clone(),
                 description: task.task_tree.root.description.clone(),
-                required_skills: task.task_tree.root.subtasks
+                required_skills: task
+                    .task_tree
+                    .root
+                    .subtasks
                     .iter()
                     .flat_map(|st| st.required_skills.clone())
                     .collect::<std::collections::HashSet<_>>()
@@ -416,15 +454,23 @@ impl SatswarmProtocol {
         Ok(bids)
     }
 
-    async fn select_winning_bid(&self, bids: Vec<TaskBid>) -> Result<TaskBid, Box<dyn std::error::Error>> {
+    async fn select_winning_bid(
+        &self,
+        bids: Vec<TaskBid>,
+    ) -> Result<TaskBid, Box<dyn std::error::Error>> {
         let marketplace = self.marketplace_client.read().await;
-        
-        marketplace.select_winning_bid(bids)
+
+        marketplace
+            .select_winning_bid(bids)
             .await
             .ok_or_else(|| "No suitable bid found".into())
     }
 
-    async fn create_payment_escrow(&self, task_id: &str, winning_bid: &TaskBid) -> Result<PaymentEscrow, Box<dyn std::error::Error>> {
+    async fn create_payment_escrow(
+        &self,
+        task_id: &str,
+        winning_bid: &TaskBid,
+    ) -> Result<PaymentEscrow, Box<dyn std::error::Error>> {
         let conditions = EscrowConditions {
             requires_verification: true,
             min_quality_rating: self.config.min_reputation_threshold,
@@ -434,23 +480,28 @@ impl SatswarmProtocol {
         };
 
         let mut payment_system = self.payment_system.write().await;
-        let escrow = payment_system.create_escrow(
-            task_id,
-            &self.keys.public_key().to_string(),
-            &winning_bid.specialist_pubkey,
-            winning_bid.quoted_price_sats,
-            conditions,
-        ).await?;
+        let escrow = payment_system
+            .create_escrow(
+                task_id,
+                &self.keys.public_key().to_string(),
+                &winning_bid.specialist_pubkey,
+                winning_bid.quoted_price_sats,
+                conditions,
+            )
+            .await?;
 
         Ok(escrow)
     }
 
-    async fn simulate_task_execution(&self, task_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn simulate_task_execution(
+        &self,
+        task_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         println!("🔬 Specialist working on task...");
-        
+
         // Simulate work time
         tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-        
+
         // Log work submission
         let mut dashboard = self.dashboard.write().await;
         dashboard.record_task_event(
@@ -464,11 +515,14 @@ impl SatswarmProtocol {
         Ok(())
     }
 
-    async fn verify_task_output(&self, task_id: &str) -> Result<VerificationResult, Box<dyn std::error::Error>> {
+    async fn verify_task_output(
+        &self,
+        task_id: &str,
+    ) -> Result<VerificationResult, Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
-        
+
         println!("🔍 Verifying task output...");
-        
+
         // Log verification start
         {
             let mut dashboard = self.dashboard.write().await;
@@ -485,7 +539,7 @@ impl SatswarmProtocol {
 
         // Mock verification result (high quality for demo)
         let quality_score = 4.6 + (rand::random::<f64>() * 0.4); // 4.6-5.0 range
-        
+
         let verification_result = VerificationResult {
             verifier_id: "mock_verifier".to_string(),
             verification_method: VerificationMethod::MockVerification,
@@ -512,19 +566,29 @@ impl SatswarmProtocol {
         Ok(verification_result)
     }
 
-    async fn release_payment(&self, task_id: &str, verification: &VerificationResult) -> Result<(), Box<dyn std::error::Error>> {
+    async fn release_payment(
+        &self,
+        task_id: &str,
+        verification: &VerificationResult,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
 
         // Get escrow ID
         let escrow_id = {
             let tasks = self.active_tasks.read().await;
             let task = tasks.get(task_id).ok_or("Task not found")?;
-            task.escrow.as_ref().ok_or("No escrow found")?.escrow_id.clone()
+            task.escrow
+                .as_ref()
+                .ok_or("No escrow found")?
+                .escrow_id
+                .clone()
         };
 
         // Release payment
         let mut payment_system = self.payment_system.write().await;
-        payment_system.release_escrow(&escrow_id, verification.quality_score).await?;
+        payment_system
+            .release_escrow(&escrow_id, verification.quality_score)
+            .await?;
 
         // Log payment release
         {
@@ -543,7 +607,11 @@ impl SatswarmProtocol {
         Ok(())
     }
 
-    async fn update_reputation(&self, task_id: &str, verification: &VerificationResult) -> Result<(), Box<dyn std::error::Error>> {
+    async fn update_reputation(
+        &self,
+        task_id: &str,
+        verification: &VerificationResult,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (specialist_pubkey, task_description) = {
             let tasks = self.active_tasks.read().await;
             let task = tasks.get(task_id).ok_or("Task not found")?;
@@ -575,7 +643,10 @@ impl SatswarmProtocol {
         Ok(())
     }
 
-    async fn process_economic_rewards(&self, task_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn process_economic_rewards(
+        &self,
+        task_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut payment_system = self.payment_system.write().await;
         let distributions = payment_system.distribute_deflationary_rewards().await?;
 
@@ -589,12 +660,16 @@ impl SatswarmProtocol {
         Ok(())
     }
 
-    async fn update_task_status(&self, task_id: &str, status: TaskExecutionStatus) -> Result<(), Box<dyn std::error::Error>> {
+    async fn update_task_status(
+        &self,
+        task_id: &str,
+        status: TaskExecutionStatus,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut tasks = self.active_tasks.write().await;
         if let Some(task) = tasks.get_mut(task_id) {
             task.status = status.clone();
             task.updated_at = Utc::now().timestamp() as u64;
-            
+
             // Add log entry
             task.execution_log.push(ExecutionLogEntry {
                 timestamp: Utc::now().timestamp() as u64,
@@ -638,7 +713,7 @@ impl SatswarmProtocol {
     pub async fn print_system_status(&self) {
         let dashboard = self.dashboard.read().await;
         dashboard.print_dashboard();
-        
+
         let payment_system = self.payment_system.read().await;
         payment_system.print_economic_status();
     }

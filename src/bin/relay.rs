@@ -13,10 +13,10 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    
+
     println!("📡 Satswarm NOSTR Relay");
     println!("Starting on port: {}", args.port);
     println!("🚧 Full implementation coming soon!");
-    
+
     Ok(())
 }
