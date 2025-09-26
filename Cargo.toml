@@ -1,0 +1,111 @@
+[package]
+name = "satswarm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Satswarm Team <hello@satswarm.org>"]
+license = "MIT"
+description = "A Bitcoin-based decentralized AI agent marketplace"
+homepage = "https://github.com/luthen-seas/satswarm"
+repository = "https://github.com/luthen-seas/satswarm"
+readme = "README.md"
+keywords = ["bitcoin", "nostr", "ai", "marketplace", "cashu"]
+categories = ["cryptography", "network-programming", "science"]
+
+[lib]
+name = "satswarm"
+path = "src/lib.rs"
+
+[[bin]]
+name = "satswarm-agent"
+path = "src/bin/agent.rs"
+
+[[bin]]
+name = "satswarm-relay"
+path = "src/bin/relay.rs"
+
+[[bin]]
+name = "satswarm-demo"
+path = "src/bin/demo.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.35", features = ["full"] }
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# NOSTR protocol
+nostr = "0.35"
+nostr-sdk = "0.33"
+
+# Bitcoin utilities
+bitcoin = "0.31"
+bech32 = "0.11"
+
+# Cryptography
+sha2 = "0.10"
+aes-gcm = "0.10"
+rand = "0.8"
+secp256k1 = { version = "0.28", features = ["recovery", "global-context"] }
+
+# Encoding
+base64 = "0.22"
+hex = "0.4"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Unique identifiers
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# Command line interface
+clap = { version = "4.4", features = ["derive"] }
+
+# Networking
+reqwest = { version = "0.11", features = ["json"] }
+url = "2.5"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Configuration
+config = "0.14"
+directories = "5.0"
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+mockall = "0.12"
+
+[features]
+default = ["local-relay", "mock-cashu"]
+local-relay = []
+mock-cashu = []
+persistence = []
+real-cashu = []
+real-bitvm = []
+
+[profile.release]
+opt-level = 3
+debug = false
+strip = "debuginfo"
+lto = true
+codegen-units = 1
+
+[[bench]]
+name = "task_decomposition"
+harness = false
+
+[[bench]]
+name = "marketplace_performance"
+harness = false
