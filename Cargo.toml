@@ -102,10 +102,3 @@ strip = "debuginfo"
 lto = true
 codegen-units = 1
 
-[[bench]]
-name = "task_decomposition"
-harness = false
-
-[[bench]]
-name = "marketplace_performance"
-harness = false
