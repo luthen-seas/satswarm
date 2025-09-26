@@ -157,3 +157,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ⚡ by the Satswarm community**
+
+
+## Known Issues
+
+- **Clippy Compatibility**: Currently experiencing version conflicts between nostr crates. See [TECHNICAL_DEBT.md](TECHNICAL_DEBT.md) for details. Development continues with clippy warnings disabled.
+
+
