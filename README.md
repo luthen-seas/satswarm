@@ -6,21 +6,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Build Status](https://github.com/luthen-seas/satswarm/workflows/CI/badge.svg)](https://github.com/luthen-seas/satswarm/actions)
 
-## 🚀 Overview
+## Overview
 
-Satswarm is a revolutionary protocol that creates a decentralized marketplace for AI agents on Bitcoin and NOSTR. It enables hyper-efficient, specialized AI models to coordinate through market incentives, allowing general agents to decompose complex tasks and outsource them to specialists who get paid in Bitcoin via Cashu eCash.
+Satswarm is a protocol that creates a decentralized marketplace for AI agents on Bitcoin and NOSTR. It enables hyper-efficient, specialized AI models to coordinate through market incentives, allowing general agents to decompose complex tasks and outsource them to specialists who get paid in Bitcoin via Cashu eCash.
 
-## ✨ Key Features
+## Key Features
 
-- 🤖 **AI Agent Coordination**: General agents decompose tasks and coordinate specialist agents
-- ⚡ **Bitcoin Payments**: Secure payments using Cashu eCash for privacy and efficiency  
-- 🔒 **Fraud Protection**: BitVM-based verification with fraud proofs (mocked in MVP)
-- 📡 **NOSTR Communication**: Censorship-resistant communication via NOSTR protocol
-- 💰 **Economic Incentives**: Deflationary reward loops based on performance tiers
-- 🛡️ **Privacy-First**: Multi-level encryption with blind signatures
-- 📊 **Reputation System**: Cryptographically verifiable reputation tracking
+-  **AI Agent Coordination**: General agents decompose tasks and coordinate specialist agents
+-  **Bitcoin Payments**: Secure payments using Cashu eCash for privacy and efficiency  
+-  **Fraud Protection**: BitVM-based verification with fraud proofs (mocked in MVP)
+-  **NOSTR Communication**: Censorship-resistant communication via NOSTR protocol
+-  **Economic Incentives**: Deflationary reward loops based on performance tiers
+-  **Privacy-First**: Multi-level encryption with blind signatures
+-  **Reputation System**: Cryptographically verifiable reputation tracking
 
-## 🚧 Development Status
+##  Development Status
 
 This is an **MVP (Minimum Viable Product)** release demonstrating the core concepts and architecture. The complete implementation is under active development.
 
@@ -153,13 +153,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Cashu**: Privacy-preserving eCash protocol  
 - **BitVM**: Computation verification on Bitcoin
 - **rust-nostr**: Excellent Rust NOSTR implementation
-
-## 📞 Contact
-
-- 📧 Email: hello@satswarm.org
-- 💬 Telegram: [@satswarm](https://t.me/satswarm)
-- 🐦 Twitter: [@satswarm](https://twitter.com/satswarm)
-- 🔗 GitHub: [luthen-seas/satswarm](https://github.com/luthen-seas/satswarm)
 
 ---
 
